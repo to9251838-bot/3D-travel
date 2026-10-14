@@ -1,6 +1,6 @@
 import os
 import time
-from typing import Optional
+from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, HTTPException, Query
@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 APP_TITLE = "World Explorer"
+BASE_DIR = Path(__file__).resolve().parent
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "").strip()
 CLOUDFLARE_ACCOUNT_ID = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
 CLOUDFLARE_API_TOKEN = os.getenv("CLOUDFLARE_API_TOKEN", "").strip()
@@ -26,13 +27,23 @@ class SkyRequest(BaseModel):
     period: str = Field(default="day", max_length=20)
 
 
+def read_html(filename: str) -> str:
+    path = BASE_DIR / filename
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        raise HTTPException(500, f"{filename} is missing from the repository root")
+
+
 @app.get("/", response_class=HTMLResponse)
 async def home():
-    try:
-        with open("index.html", encoding="utf-8") as f:
-            return f.read()
-    except FileNotFoundError:
-        raise HTTPException(500, "index.html is missing from the repository root")
+    return read_html("index.html")
+
+
+@app.get("/navigator", response_class=HTMLResponse)
+async def navigator():
+    """Live location and route-planning page."""
+    return read_html("navigator.html")
 
 
 @app.get("/api/health")
@@ -42,6 +53,7 @@ async def health():
         "openweather_configured": bool(OPENWEATHER_API_KEY),
         "cloudflare_configured": bool(CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN),
         "cloudflare_model": CLOUDFLARE_IMAGE_MODEL,
+        "navigator_available": (BASE_DIR / "navigator.html").exists(),
     }
 
 
@@ -54,7 +66,13 @@ async def weather(lat: float = Query(ge=-90, le=90), lon: float = Query(ge=-180,
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.get(
                 url,
-                params={"lat": lat, "lon": lon, "appid": OPENWEATHER_API_KEY, "units": "metric", "lang": "ru"},
+                params={
+                    "lat": lat,
+                    "lon": lon,
+                    "appid": OPENWEATHER_API_KEY,
+                    "units": "metric",
+                    "lang": "ru",
+                },
             )
         if response.status_code != 200:
             print("OpenWeather error:", response.status_code, response.text[:500])
@@ -90,7 +108,6 @@ async def generate_sky(request: SkyRequest):
     if period not in {"dawn", "day", "dusk", "night", "morning", "evening"}:
         period = "day"
 
-    # Reuse a recent result for nearby points with the same weather/time, to avoid repeated AI charges.
     cache_key = f"{round(request.lat, 1)}:{round(request.lon, 1)}:{request.weather.lower()}:{period}"
     cached = _sky_cache.get(cache_key)
     if cached and time.time() - cached[0] < 3600:
@@ -112,7 +129,10 @@ async def generate_sky(request: SkyRequest):
         async with httpx.AsyncClient(timeout=180) as client:
             response = await client.post(
                 endpoint,
-                headers={"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}", "Content-Type": "application/json"},
+                headers={
+                    "Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}",
+                    "Content-Type": "application/json",
+                },
                 json={"prompt": prompt, "steps": 4},
             )
         if response.status_code != 200:
@@ -146,3 +166,4 @@ async def generate_sky(request: SkyRequest):
     except Exception as exc:
         print("Cloudflare request failed:", repr(exc))
         raise HTTPException(502, "Не удалось связаться с Cloudflare Workers AI")
+        
