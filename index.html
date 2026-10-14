@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>World Explorer — 3D Planet</title>
+<link href="https://unpkg.com/maplibre-gl@5.6.2/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@5.6.2/dist/maplibre-gl.js"></script>
+<style>
+:root{color-scheme:dark;--panel:#071326e8;--blue:#2998ff;--gold:#f3cc62}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050a14;color:#eef5ff;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}
+#map{position:absolute;inset:0;background:#0b1830}
+#sky{position:absolute;z-index:2;top:0;left:0;width:100%;height:34%;object-fit:cover;object-position:center bottom;pointer-events:none;opacity:0;transition:opacity 1.4s;mask-image:linear-gradient(to bottom,#000 0%,#000a 60%,transparent 100%);mix-blend-mode:screen}
+#sky.visible{opacity:.76}
+#night{position:absolute;z-index:3;inset:0;background:#06112c;opacity:0;pointer-events:none;transition:opacity 2s}
+#rain{position:absolute;z-index:4;inset:0;pointer-events:none;opacity:0;transition:opacity .8s;background:repeating-linear-gradient(105deg,transparent 0 17px,#b9dfff55 18px,#b9dfff55 19px,transparent 20px 34px);animation:rain .5s linear infinite}
+#rain.on{opacity:.48}@keyframes rain{to{background-position:-28px 85px}}
+.top{position:absolute;z-index:10;top:14px;left:14px;right:14px;display:flex;justify-content:space-between;gap:10px;pointer-events:none}
+.brand,.clock,.search,.panel,.modes,.status,.skybtn{pointer-events:auto;background:var(--panel);border:1px solid #ffffff24;backdrop-filter:blur(16px);box-shadow:0 12px 35px #0004}
+.brand{padding:11px 14px;border-radius:14px;font-weight:900;letter-spacing:.5px}.brand small{display:block;color:#91b9e9;font-size:10px;letter-spacing:2px;margin-top:3px}
+.clock{padding:9px 12px;border-radius:12px;text-align:right;min-width:118px}.clock strong{display:block;font-size:20px;font-variant-numeric:tabular-nums}.clock span{font-size:10px;color:#9eafd0}
+.search{position:absolute;z-index:10;top:82px;left:14px;display:flex;width:min(450px,calc(100vw - 28px));padding:7px;border-radius:13px;gap:6px}
+input,button{font:inherit}input{min-width:0;flex:1;background:#050c1a;border:1px solid #ffffff20;border-radius:9px;padding:11px;color:#fff;outline:none}input:focus{border-color:#2998ff99}
+button{border:1px solid #ffffff25;border-radius:10px;padding:10px 12px;background:#142542;color:#fff;cursor:pointer;font-weight:750;font-size:12px}button.primary{background:linear-gradient(110deg,#1477dc,#31a3ff);border-color:transparent}button.active{background:var(--gold);color:#14203a;border-color:#ffe69a}button:disabled{opacity:.5;cursor:wait}
+.panel{position:absolute;z-index:10;top:138px;left:14px;width:258px;border-radius:16px;padding:14px}
+.label{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#8eacd7;font-weight:850;margin-bottom:9px}
+.weather{display:flex;align-items:center;gap:9px}.weather img{width:43px;height:43px}.temp{font-size:27px;font-weight:850}.desc{font-size:12px;color:#bdcbe3;text-transform:capitalize}
+.mini{font-size:11px;color:#9aabc8;line-height:1.6;margin-top:6px}.divider{height:1px;background:#ffffff20;margin:12px 0}
+.modes{position:absolute;z-index:10;bottom:18px;left:50%;transform:translateX(-50%);display:flex;gap:6px;padding:7px;border-radius:16px;max-width:calc(100vw - 20px)}
+.modes button{white-space:nowrap;padding:11px 13px}.modes span{display:block;font-size:10px;font-weight:500;opacity:.75;margin-top:3px}
+.status{position:absolute;z-index:10;bottom:87px;left:50%;transform:translateX(-50%);padding:9px 12px;border-radius:11px;color:#c7d8f4;font-size:11px;max-width:calc(100vw - 24px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.skybtn{position:absolute;z-index:10;right:14px;bottom:87px;border-radius:11px}
+.marker{position:absolute;z-index:8;left:50%;top:50%;transform:translate(-50%,-50%);font-size:32px;filter:drop-shadow(0 3px 4px #0009);pointer-events:none;text-align:center}
+.marker small{display:block;font-size:10px;letter-spacing:1px;font-weight:900;background:#061327d9;padding:4px 7px;border-radius:7px}
+.hint{position:absolute;z-index:9;right:14px;top:82px;color:#e6efff;background:#071225bb;border:1px solid #ffffff1a;border-radius:10px;padding:9px 11px;font-size:10px;max-width:230px;line-height:1.4}
+@media(max-width:600px){.top{top:8px;left:8px;right:8px}.brand{padding:9px;font-size:12px}.clock{padding:7px 9px;min-width:100px}.clock strong{font-size:17px}.search{top:70px;left:8px;width:calc(100vw - 16px)}.panel{top:auto;bottom:84px;left:8px;width:200px;padding:10px}.weather img{width:34px;height:34px}.temp{font-size:22px}.mini{font-size:10px}.divider{margin:7px 0}.modes{bottom:8px;gap:3px;padding:5px}.modes button{padding:9px 8px;font-size:11px}.modes span{font-size:9px}.status{bottom:62px;font-size:10px}.skybtn{right:8px;bottom:62px;padding:8px}.hint{display:none}}
+</style>
+</head>
+<body>
+<div id="map"></div><img id="sky" alt="Небо, созданное Cloudflare AI"><div id="night"></div><div id="rain"></div>
+<div class="top"><div class="brand">✦ WORLD EXPLORER<small>3D PLANET SIMULATOR</small></div><div class="clock"><strong id="clock">--:--:--</strong><span id="date">Местное время</span></div></div>
+<div class="search"><input id="place" placeholder="Город, адрес или координаты"><button class="primary" id="searchBtn">Перейти</button><button id="locBtn" title="Моё местоположение">◎</button></div>
+<div class="panel"><div class="label">Погода в центре карты</div><div class="weather"><img id="icon" alt="" src="https://openweathermap.org/img/wn/01d@2x.png"><div><div class="temp" id="temp">--°</div><div class="desc" id="desc">Получение погоды…</div></div></div><div class="mini" id="meta">Подключение к OpenWeather</div><div class="divider"></div><div class="label">Транспорт</div><div class="mini" id="speed">Пешеход · 5 км/ч</div><div class="mini" id="coords">Координаты загружаются…</div><div class="mini">Карта подгружает тайлы вокруг камеры по мере перемещения.</div></div>
+<div class="hint">Спутниковые снимки · 3D-рельеф · доступные 3D-здания. Введи любое место на Земле, чтобы переместиться туда.</div>
+<div class="marker" id="marker">🚶<small>ТЫ ЗДЕСЬ</small></div><button class="skybtn" id="skyBtn">☁ Создать небо</button><div class="status" id="status">Запрашиваем текущее местоположение…</div>
+<div class="modes"><button class="active" data-mode="walk">🚶 Пешком<span>5 км/ч</span></button><button data-mode="car">🚗 Машина<span>120 км/ч</span></button><button data-mode="plane">✈ Самолёт<span>900 км/ч</span></button><button id="forward">↑ Вперёд<span>удерживать</span></button></div>
+<script>
+const $=id=>document.getElementById(id);
+let map=null,center={lat:32.0853,lon:34.7818},mode='walk',moving=false,moveTimer=null,weather=null,skyKey='',skyBusy=false;
+const speeds={walk:5,car:120,plane:900},emojis={walk:'🚶',car:'🚗',plane:'✈️'};
+function say(s){$('status').textContent=s}
+function coords(){ $('coords').textContent=`${center.lat.toFixed(5)}, ${center.lon.toFixed(5)}`;$('speed').textContent=`${mode==='walk'?'Пешеход':mode==='car'?'Машина':'Самолёт'} · ${speeds[mode]} км/ч`;$('marker').firstChild.textContent=emojis[mode]}
+function period(){const now=new Date(),offset=weather?.timezone??(-now.getTimezoneOffset()*60),local=new Date(now.getTime()+(offset+now.getTimezoneOffset()*60)*1000),h=local.getUTCHours()+local.getUTCMinutes()/60;return h<5?'night':h<8?'dawn':h<17?'day':h<20?'dusk':'night'}
+function updateClock(){const now=new Date(),offset=weather?.timezone??(-now.getTimezoneOffset()*60),local=new Date(now.getTime()+(offset+now.getTimezoneOffset()*60)*1000);$('clock').textContent=local.toISOString().slice(11,19);$('date').textContent=local.toISOString().slice(0,10)+' · местное время';const h=local.getUTCHours()+local.getUTCMinutes()/60;$('night').style.opacity=(h<5.5||h>19.5)?'.34':(h<7||h>18?'.13':'0')}
+function weatherKind(w){const id=Number(w?.weather_id||800);if(id>=200&&id<600)return 'rain';if(id>=600&&id<700)return 'snow';if(id>=801)return 'cloudy';return 'clear'}
+async function getWeather(){try{const r=await fetch(`/api/weather?lat=${center.lat}&lon=${center.lon}`),d=await r.json();if(!r.ok)throw Error(d.detail||'Погода недоступна');weather=d;$('temp').textContent=`${d.temp}°C`;$('desc').textContent=d.description||'Погода';$('icon').src=`https://openweathermap.org/img/wn/${d.icon||'01d'}@2x.png`;$('meta').textContent=`Влажность ${d.humidity??'—'}% · ветер ${d.wind??'—'} м/с`;$('rain').classList.toggle('on',weatherKind(d)==='rain');updateClock();maybeSky()}catch(e){$('desc').textContent='Погода недоступна';$('meta').textContent=e.message;updateClock()}}
+function refreshPosition(){const c=map.getCenter();center={lat:c.lat,lon:c.lng};coords();getWeather()}
+function initMap(lat,lon){
+ map=new maplibregl.Map({container:'map',style:'https://tiles.openfreemap.org/styles/liberty',center:[lon,lat],zoom:16,pitch:65,bearing:-15,antialias:true,maxPitch:85});
+ map.addControl(new maplibregl.NavigationControl({visualizePitch:true}),'bottom-right');
+ map.on('load',()=>{
+  try{map.addSource('terrain-dem',{type:'raster-dem',tiles:['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],tileSize:256,encoding:'terrarium',maxzoom:15});map.setTerrain({source:'terrain-dem',exaggeration:1.25})}catch(e){console.warn('Terrain unavailable',e)}
+  try{map.addSource('satellite-world',{type:'raster',tiles:['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],tileSize:256,attribution:'Esri World Imagery'});const layers=map.getStyle().layers||[];const building=layers.find(l=>l.type==='fill-extrusion'&&/building/i.test(l.id));map.addLayer({id:'satellite-world-layer',type:'raster',source:'satellite-world',paint:{'raster-opacity':.84}},building?.id)}catch(e){console.warn('Satellite overlay unavailable',e)}
+  try{if(map.setSky)map.setSky({'sky-type':'atmosphere','sky-atmosphere-sun':[0,0],'sky-atmosphere-sun-intensity':5})}catch(e){}
+  say('3D-карта готова. Выбери транспорт или найди место на Земле.');refreshPosition()
+ });
+ map.on('moveend',refreshPosition);
+ map.on('error',e=>{if(e?.error)console.warn('Map tile error',e.error)});
+}
+function destination(lat,lon,km,bearing){const R=6371,b=bearing*Math.PI/180,d=km/R,p1=lat*Math.PI/180,l1=lon*Math.PI/180,p2=Math.asin(Math.sin(p1)*Math.cos(d)+Math.cos(p1)*Math.sin(d)*Math.cos(b)),l2=l1+Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(p1),Math.cos(d)-Math.sin(p1)*Math.sin(p2));return {lat:p2*180/Math.PI,lon:((l2*180/Math.PI+540)%360)-180}}
+function startMoving(){if(moving||!map)return;moving=true;say(`Перемещение: ${mode==='walk'?'пешком':mode==='car'?'на машине':'на самолёте'} · ${speeds[mode]} км/ч`);const tick=()=>{if(!moving)return;const c=map.getCenter(),km=speeds[mode]/3600*.7,next=destination(c.lat,c.lng,km,map.getBearing());map.easeTo({center:[next.lon,next.lat],duration:700,essential:true});moveTimer=setTimeout(tick,720)};tick()}
+function stopMoving(){moving=false;if(moveTimer)clearTimeout(moveTimer)}
+$('forward').addEventListener('pointerdown',e=>{e.preventDefault();startMoving()});['pointerup','pointerleave','pointercancel'].forEach(ev=>$('forward').addEventListener(ev,stopMoving));
+document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('[data-mode]').forEach(x=>x.classList.remove('active'));b.classList.add('active');mode=b.dataset.mode;coords();if(!map)return;if(mode==='plane')map.easeTo({pitch:42,zoom:Math.max(3,map.getZoom()-2),duration:800});else if(mode==='walk')map.easeTo({pitch:65,zoom:Math.max(15,map.getZoom()),duration:800});else map.easeTo({pitch:58,zoom:Math.max(13,map.getZoom()),duration:800})}));
+$('locBtn').addEventListener('click',()=>{if(!navigator.geolocation)return say('Геолокация не поддерживается браузером.');say('Запрашиваем разрешение на геолокацию…');navigator.geolocation.getCurrentPosition(p=>{center={lat:p.coords.latitude,lon:p.coords.longitude};map.flyTo({center:[center.lon,center.lat],zoom:16,pitch:65,duration:2000});say('Текущее местоположение найдено.')},e=>say('Геолокация не получена: '+e.message),{enableHighAccuracy:true,timeout:12000,maximumAge:15000})});
+function parseCoords(q){const m=q.match(/^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$/);if(!m)return null;const lat=+m[1],lon=+m[2];return Math.abs(lat)<=90&&Math.abs(lon)<=180?{lat,lon}:null}
+async function searchPlace(){const q=$('place').value.trim();if(!q)return;const p=parseCoords(q);if(p){map.flyTo({center:[p.lon,p.lat],zoom:16,pitch:65,duration:2200});return}say('Ищем место…');try{const r=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q='+encodeURIComponent(q),{headers:{'Accept-Language':'ru'}}),d=await r.json();if(!d.length)throw Error('Место не найдено');map.flyTo({center:[+d[0].lon,+d[0].lat],zoom:16,pitch:65,duration:2200});say('Перемещаемся к '+d[0].display_name.split(',').slice(0,2).join(','))}catch(e){say('Поиск не удался: '+e.message)}}
+$('searchBtn').addEventListener('click',searchPlace);$('place').addEventListener('keydown',e=>{if(e.key==='Enter')searchPlace()});
+function maybeSky(){const key=`${Math.round(center.lat*10)/10}:${Math.round(center.lon*10)/10}:${weatherKind(weather)}:${period()}`;if(key===skyKey||skyBusy)return;skyKey=key;generateSky(false)}
+async function generateSky(manual){if(skyBusy)return;skyBusy=true;const b=$('skyBtn');if(manual){b.disabled=true;b.textContent='Создаём небо…'}try{const r=await fetch('/api/sky',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lat:center.lat,lon:center.lon,weather:weather?.description||weatherKind(weather),period:period()})}),d=await r.json();if(!r.ok)throw Error(d.detail||'Cloudflare недоступен');$('sky').src=d.image;$('sky').classList.add('visible');if(manual)say('Cloudflare создал небо с учётом погоды и времени.')}catch(e){if(manual)say('Небо не создано: '+e.message);else console.warn('Sky generation:',e.message)}finally{skyBusy=false;b.disabled=false;b.textContent='☁ Создать небо'}}
+$('skyBtn').addEventListener('click',()=>generateSky(true));setInterval(updateClock,1000);
+if(!window.maplibregl){say('Не удалось загрузить MapLibre. Проверь интернет.')}else{initMap(center.lat,center.lon);if(navigator.geolocation)navigator.geolocation.getCurrentPosition(p=>{center={lat:p.coords.latitude,lon:p.coords.longitude};if(map)map.flyTo({center:[center.lon,center.lat],zoom:16,pitch:65,duration:1700});say('Стартуем с твоего текущего местоположения.')},()=>say('Геолокация недоступна — стартовая точка Тель-Авив. Нажми ◎, чтобы попробовать снова.'),{enableHighAccuracy:true,timeout:10000,maximumAge:30000})}
+</script>
+</body></html>
